@@ -106,7 +106,6 @@ srpm: get-sources $(SPECFILE)
 verrel:
 	@echo $(NAME)-$(VERSION)-$(RELEASE)
 
-
 update-repo-current:
 	ln -f rpm/x86_64/kernel-$(VERSION)-$(RELEASE)*.rpm ../yum/current-release/current/dom0/rpm/
 	ln -f rpm/x86_64/kernel-debuginfo-$(VERSION)-$(RELEASE)*.rpm ../yum/current-release/current/dom0/rpm/
