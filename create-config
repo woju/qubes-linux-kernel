@@ -1,0 +1,168 @@
+#! /usr/bin/env python
+# vim: set ft=python ts=4 sw=4 sts=4 et :
+# -*- coding: utf-8 -*-
+
+# create-config
+#
+# Copyright (C) 2015  Jason Mehring
+#
+# License: GPL-2+
+#
+# ------------------------------------------------------------------------------
+
+from __future__ import unicode_literals
+
+import sys
+import os
+import locale
+import re
+
+from collections import OrderedDict
+
+#BASE_DIR = os.getcwd()
+#LIBS_DIR = os.path.join(BASE_DIR, 'libs')
+#if os.path.exists(LIBS_DIR) and os.path.isdir(LIBS_DIR):
+#    if LIBS_DIR not in sys.path:
+#        sys.path.insert(1, LIBS_DIR)
+
+# This is almost always a good thing to do at the beginning of your programs.
+locale.setlocale(locale.LC_ALL, '')
+
+
+class DictDiffer(object):
+    """A dictionary difference calculator.
+
+    Originally posted as:
+    http://stackoverflow.com/questions/1165352/fast-comparison-between-two-python-dictionary/1165552#1165552
+
+    Calculate the difference between two dictionaries as:
+    (1) items added
+    (2) items removed
+    (3) keys same in both but changed values
+    (4) keys same in both and unchanged values
+    """
+    def __init__(self, current_dict, past_dict):
+        self.current_dict, self.past_dict = current_dict, past_dict
+        self.current_keys, self.past_keys = [
+            set(d.keys()) for d in (current_dict, past_dict)
+        ]
+        self.intersect = self.current_keys.intersection(self.past_keys)
+
+    def added(self):
+        return self.current_keys - self.intersect
+    def removed(self):
+        return self.past_keys - self.intersect
+    def changed(self):
+        return set(o for o in self.intersect
+                   if self.past_dict[o] != self.current_dict[o])
+    def unchanged(self):
+        return set(o for o in self.intersect
+                   if self.past_dict[o] == self.current_dict[o])
+
+
+def debug(data, debug=False):
+    if debug:
+        from pprint import pprint
+        pprint(data)
+
+
+def parse_configfile(filename, show=True):
+    config = OrderedDict()
+    discarded = []
+    with open(filename, mode='r') as in_file:
+        for line in in_file:
+            # CONFIG_XFRM_MIGRATE is not set\n
+            unset = re.match(r'#\s+(?P<key>.*)\s+is not set.*', line)
+            if unset:
+                key = unset.groupdict()['key'].strip()
+                value = unset.group(0)
+                if show:
+                    print '[{0}] = [{1}]'.format(key, value)
+                config[key] = value
+                continue
+
+            if re.search(r'(^\s*#)', line):
+                discarded.append(line)
+                continue
+
+            keypair = re.match(r'(?P<key>.*)(=)(?P<value>.*)', line)
+            if keypair:
+                key = keypair.groupdict()['key'].strip()
+                value = keypair.groupdict()['value'].strip()
+                if show:
+                    print '[{0}] = [{1}]'.format(key, value)
+                config[key] = value
+            else:
+                discarded.append(line)
+
+    return config, discarded
+
+
+def write_configfile(filename, data):
+    with open(filename, mode='w') as out_file:
+        for key, value in data.items():
+            if '#' in value:
+                out_file.write(value + '\n')
+            else:
+                line = '{0}={1}\n'.format(key, value)
+                out_file.write(line)
+
+
+def main(argv):
+    DEBUG = False
+    config_new_filename = 'config-pvops'
+    config_old_filename = 'config-pvops.3.12'
+    config_merged_filename = 'config-pvops.merged'
+
+    config_new, discarded = parse_configfile(config_new_filename)
+    #debug(discarded, DEBUG)
+
+    config_old, discarded = parse_configfile(config_old_filename)
+    debug(discarded, DEBUG)
+
+    differ = DictDiffer(config_new, config_old)
+    config_merged = OrderedDict()
+
+    # All keys that are only in config_new
+    added = differ.added()
+    for key in added:
+        config_merged[key] = config_new[key]
+
+    # All keys that are unchanged, but common to both
+    unchanged = differ.unchanged()
+    for key in unchanged:
+        config_merged[key] = config_new[key]
+
+    # All keys that changed, but common to both. Use config_old value
+    changed = differ.changed()
+    for key in changed:
+        config_merged[key] = config_old[key]
+
+    # The remaining keys should be the dropped
+    removed = differ.removed()
+
+    print 'Length of new = ', len(config_new)
+    print 'Length of old = ', len(config_old)
+    print 'Length of new - old = ', len(config_new) - len(config_old)
+    print 'Length of new - removed = ', len(config_new) - len(removed)
+    print 'Length of added + unchanged + changed = ', len(added) + len(unchanged) + len(changed)
+    print 'Length of merged = ', len(config_merged)
+    print
+
+    print 'Writing config_merged...'
+    write_configfile(config_merged_filename, config_merged)
+
+    print 'Loading config_merged from disk to check length...'
+    config_merged, discarded = parse_configfile(config_merged_filename, show=False)
+    debug(discarded, DEBUG)
+
+    print
+    print 'Length of merged = ', len(config_merged)
+    print
+
+
+
+
+if __name__ == '__main__':
+    main(sys.argv)
+    sys.exit(0)
