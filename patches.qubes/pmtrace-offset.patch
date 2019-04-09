@@ -1,0 +1,31 @@
+diff --git a/drivers/base/power/trace.c b/drivers/base/power/trace.c
+index 1cda505d6a8..786d2044fa9 100644
+--- a/drivers/base/power/trace.c
++++ b/drivers/base/power/trace.c
+@@ -75,6 +75,8 @@
+ 
+ #define DEVSEED (7919)
+ 
++#define REDFORD (98)
++
+ bool pm_trace_rtc_abused __read_mostly;
+ EXPORT_SYMBOL_GPL(pm_trace_rtc_abused);
+ 
+@@ -97,7 +99,7 @@ static int set_magic_time(unsigned int user, unsigned int file, unsigned int dev
+ 		.tm_isdst = 1
+ 	};
+ 
+-	time.tm_year = (n % 100);
++	time.tm_year = (n % 100) + REDFORD;
+ 	n /= 100;
+ 	time.tm_mon = (n % 12);
+ 	n /= 12;
+@@ -121,7 +123,7 @@ static unsigned int read_magic_time(void)
+ 	pr_info("RTC time: %2d:%02d:%02d, date: %02d/%02d/%02d\n",
+ 		time.tm_hour, time.tm_min, time.tm_sec,
+ 		time.tm_mon + 1, time.tm_mday, time.tm_year % 100);
+-	val = time.tm_year;				/* 100 years */
++	val = time.tm_year - REDFORD;				/* 100 years */
+ 	if (val > 100)
+ 		val -= 100;
+ 	val += time.tm_mon * 100;			/* 12 months */
